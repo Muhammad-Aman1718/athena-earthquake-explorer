@@ -1,211 +1,541 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Earthquake Explorer</title>
-<style>
-  :root {
-    --bg: #fbfcfd; --panel: #ffffff; --ink: #11181c; --muted: #687076; --line: #e6e8eb;
-    --grid: #dfe3e6; --chip: #f1f3f5; --accent: #11181c;
-    --shallow: #f76b15; --mid: #d6409f; --deep: #5b5bd6;
-    color-scheme: light;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #111316; --panel: #181b1f; --ink: #edeef0; --muted: #9ba1a6; --line: #2b2f34;
-      --grid: #262a2f; --chip: #22262b; --accent: #edeef0; color-scheme: dark;
-    }
-  }
-  :root[data-theme="dark"] {
-    --bg: #111316; --panel: #181b1f; --ink: #edeef0; --muted: #9ba1a6; --line: #2b2f34;
-    --grid: #262a2f; --chip: #22262b; --accent: #edeef0; color-scheme: dark;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  .num { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
-  .wrap { padding: 14px; display: grid; gap: 12px; }
-  header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
-  h1 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); font-size: 12px; }
-  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .seg button { border: 0; background: var(--panel); color: var(--ink); padding: 6px 11px; font: inherit; font-size: 13px; cursor: pointer; }
-  .seg button + button { border-left: 1px solid var(--line); }
-  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--bg); }
-  .seg button:disabled { opacity: .5; cursor: progress; }
-  .controls { display: grid; grid-template-columns: minmax(180px, 1.2fr) auto minmax(140px, 1fr); gap: 12px; align-items: center; }
-  @media (max-width: 640px) { .controls { grid-template-columns: 1fr; } }
-  label.ctl { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
-  input[type=range] { width: 100%; accent-color: var(--accent); }
-  input[type=search] { width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font: inherit; }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chip { border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-  .chip[aria-pressed="true"] { border-color: var(--ink); background: var(--panel); }
-  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-  .stats { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
-  .stats b { color: var(--ink); font-size: 15px; display: block; }
-  .map { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .map svg { display: block; width: 100%; height: auto; }
-  .quake { cursor: pointer; transition: r .15s; }
-  .quake.sel { stroke: var(--ink); stroke-width: .6; }
-  .panel { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
-  @media (max-width: 640px) { .panel { grid-template-columns: 1fr; } }
-  .list { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; max-height: 300px; overflow: auto; }
-  .listhead { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); font-size: 12px; color: var(--muted); }
-  .listhead button { border: 0; background: none; color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-  .row { display: grid; grid-template-columns: 46px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
-  .row:hover, .row.sel { background: var(--chip); }
-  .mag { font-weight: 700; font-size: 15px; text-align: center; border-radius: 6px; padding: 2px 0; color: #fff; }
-  .place { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .meta { color: var(--muted); font-size: 12px; }
-  .detail { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 8px; align-content: start; }
-  .detail h2 { margin: 0; font-size: 15px; }
-  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
-  .kv span:nth-child(odd) { color: var(--muted); }
-  .bigmag { font-size: 34px; font-weight: 700; line-height: 1; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--chip); }
-  .empty { padding: 24px; text-align: center; color: var(--muted); }
-  .err { border: 1px solid #e5484d; color: #e5484d; background: var(--panel); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
-  .err[hidden] { display: none; }
-  a { color: var(--ink); }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <header>
-    <div>
-      <h1>Earthquake Explorer</h1>
-      <div class="sub" id="sub">Loading live data from USGS…</div>
-    </div>
-    <div class="seg" id="range" role="group" aria-label="Time range">
-      <button data-r="hour">Past hour</button>
-      <button data-r="day">Past day</button>
-      <button data-r="week">Past week</button>
-      <button data-r="month">Past month</button>
-    </div>
-  </header>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Earthquake Explorer</title>
+    <style>
+      :root {
+        --bg: #fbfcfd;
+        --panel: #ffffff;
+        --ink: #11181c;
+        --muted: #687076;
+        --line: #e6e8eb;
+        --grid: #dfe3e6;
+        --chip: #f1f3f5;
+        --accent: #11181c;
+        --shallow: #f76b15;
+        --mid: #d6409f;
+        --deep: #5b5bd6;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #111316;
+          --panel: #181b1f;
+          --ink: #edeef0;
+          --muted: #9ba1a6;
+          --line: #2b2f34;
+          --grid: #262a2f;
+          --chip: #22262b;
+          --accent: #edeef0;
+          color-scheme: dark;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #111316;
+        --panel: #181b1f;
+        --ink: #edeef0;
+        --muted: #9ba1a6;
+        --line: #2b2f34;
+        --grid: #262a2f;
+        --chip: #22262b;
+        --accent: #edeef0;
+        color-scheme: dark;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.45 ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
+      .num {
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-variant-numeric: tabular-nums;
+      }
+      .wrap {
+        padding: 14px;
+        display: grid;
+        gap: 12px;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: -0.01em;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .seg button {
+        border: 0;
+        background: var(--panel);
+        color: var(--ink);
+        padding: 6px 11px;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      .seg button + button {
+        border-left: 1px solid var(--line);
+      }
+      .seg button[aria-pressed="true"] {
+        background: var(--accent);
+        color: var(--bg);
+      }
+      .seg button:disabled {
+        opacity: 0.5;
+        cursor: progress;
+      }
+      .controls {
+        display: grid;
+        grid-template-columns: minmax(180px, 1.2fr) auto minmax(140px, 1fr);
+        gap: 12px;
+        align-items: center;
+      }
+      @media (max-width: 640px) {
+        .controls {
+          grid-template-columns: 1fr;
+        }
+      }
+      label.ctl {
+        display: grid;
+        gap: 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+      input[type="search"] {
+        width: 100%;
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--ink);
+        font: inherit;
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        border: 1px solid var(--line);
+        background: var(--chip);
+        color: var(--ink);
+        border-radius: 999px;
+        padding: 4px 10px;
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .chip[aria-pressed="true"] {
+        border-color: var(--ink);
+        background: var(--panel);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .stats {
+        display: flex;
+        gap: 18px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .stats b {
+        color: var(--ink);
+        font-size: 15px;
+        display: block;
+      }
+      .map {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .map svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      .quake {
+        cursor: pointer;
+        transition: r 0.15s;
+      }
+      .quake.sel {
+        stroke: var(--ink);
+        stroke-width: 0.6;
+      }
+      .panel {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 12px;
+      }
+      @media (max-width: 640px) {
+        .panel {
+          grid-template-columns: 1fr;
+        }
+      }
+      .list {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        max-height: 300px;
+        overflow: auto;
+      }
+      .listhead {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line);
+        position: sticky;
+        top: 0;
+        background: var(--panel);
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .listhead button {
+        border: 0;
+        background: none;
+        color: var(--ink);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 46px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+      }
+      .row:hover,
+      .row.sel {
+        background: var(--chip);
+      }
+      .mag {
+        font-weight: 700;
+        font-size: 15px;
+        text-align: center;
+        border-radius: 6px;
+        padding: 2px 0;
+        color: #fff;
+      }
+      .place {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .detail {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        display: grid;
+        gap: 8px;
+        align-content: start;
+      }
+      .detail h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 12px;
+        font-size: 13px;
+      }
+      .kv span:nth-child(odd) {
+        color: var(--muted);
+      }
+      .bigmag {
+        font-size: 34px;
+        font-weight: 700;
+        line-height: 1;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        background: var(--chip);
+      }
+      .empty {
+        padding: 24px;
+        text-align: center;
+        color: var(--muted);
+      }
+      .err {
+        border: 1px solid #e5484d;
+        color: #e5484d;
+        background: var(--panel);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+      .err[hidden] {
+        display: none;
+      }
+      a {
+        color: var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div>
+          <h1>Earthquake Explorer</h1>
+          <div class="sub" id="sub">Loading live data from USGS…</div>
+        </div>
+        <div class="seg" id="range" role="group" aria-label="Time range">
+          <button data-r="hour">Past hour</button>
+          <button data-r="day">Past day</button>
+          <button data-r="week">Past week</button>
+          <button data-r="month">Past month</button>
+        </div>
+      </header>
 
-  <div class="controls">
-    <label class="ctl">Minimum magnitude: <span class="num" id="magVal">2.5</span>
-      <input type="range" id="mag" min="0" max="7" step="0.1" value="2.5" />
-    </label>
-    <div class="ctl" style="display:grid;gap:4px;font-size:12px;color:var(--muted)">Depth
-      <div class="chips" id="depth">
-        <button class="chip" data-d="all" aria-pressed="true">All</button>
-        <button class="chip" data-d="shallow"><i class="dot" style="background:var(--shallow)"></i>Shallow &lt;70 km</button>
-        <button class="chip" data-d="mid"><i class="dot" style="background:var(--mid)"></i>70–300 km</button>
-        <button class="chip" data-d="deep"><i class="dot" style="background:var(--deep)"></i>Deep &gt;300 km</button>
+      <div class="controls">
+        <label class="ctl"
+          >Minimum magnitude: <span class="num" id="magVal">2.5</span>
+          <input type="range" id="mag" min="0" max="7" step="0.1" value="2.5" />
+        </label>
+        <div
+          class="ctl"
+          style="display: grid; gap: 4px; font-size: 12px; color: var(--muted)"
+        >
+          Depth
+          <div class="chips" id="depth">
+            <button class="chip" data-d="all" aria-pressed="true">All</button>
+            <button class="chip" data-d="shallow">
+              <i class="dot" style="background: var(--shallow)"></i>Shallow
+              &lt;70 km
+            </button>
+            <button class="chip" data-d="mid">
+              <i class="dot" style="background: var(--mid)"></i>70–300 km
+            </button>
+            <button class="chip" data-d="deep">
+              <i class="dot" style="background: var(--deep)"></i>Deep &gt;300 km
+            </button>
+          </div>
+        </div>
+        <label class="ctl"
+          >Place
+          <input
+            type="search"
+            id="place"
+            placeholder="e.g. Japan, Alaska, Chile"
+          />
+        </label>
+      </div>
+
+      <div class="err" id="err" role="alert" hidden></div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="map">
+        <svg
+          id="map"
+          viewBox="0 0 360 180"
+          role="img"
+          aria-label="World map of earthquakes"
+        ></svg>
+      </div>
+
+      <div class="panel">
+        <div class="list" id="listBox">
+          <div class="listhead">
+            <span id="listCount"></span><button id="sort">Sort: newest</button>
+          </div>
+          <div id="list"></div>
+        </div>
+        <div class="detail" id="detail">
+          <div class="meta">
+            Click a dot on the map or a row in the list to see details.
+          </div>
+        </div>
       </div>
     </div>
-    <label class="ctl">Place
-      <input type="search" id="place" placeholder="e.g. Japan, Alaska, Chile" />
-    </label>
-  </div>
 
-  <div class="err" id="err" role="alert" hidden></div>
+    <script>
+      (() => {
+        const oa = window.openai;
+        const $ = (id) => document.getElementById(id);
+        const saved = (oa && oa.widgetState) || {};
+        const state = {
+          data: null,
+          minMag: saved.minMag ?? null,
+          depth: saved.depth ?? "all",
+          place: saved.place ?? "",
+          sort: saved.sort ?? "time",
+          selected: saved.selected ?? null,
+          loading: false,
+        };
 
-  <div class="stats" id="stats"></div>
+        if (oa && oa.theme) document.documentElement.dataset.theme = oa.theme;
 
-  <div class="map"><svg id="map" viewBox="0 0 360 180" role="img" aria-label="World map of earthquakes"></svg></div>
+        const depthBand = (d) =>
+          d < 70 ? "shallow" : d <= 300 ? "mid" : "deep";
+        const depthColor = (d) => `var(--${depthBand(d)})`;
+        const ago = (t) => {
+          const m = Math.round((Date.now() - t) / 60000);
+          if (m < 60) return `${m} min ago`;
+          const h = Math.round(m / 60);
+          if (h < 48) return `${h} h ago`;
+          return `${Math.round(h / 24)} days ago`;
+        };
+        const esc = (s) =>
+          String(s).replace(
+            /[&<>"']/g,
+            (c) =>
+              ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+              })[c],
+          );
 
-  <div class="panel">
-    <div class="list" id="listBox">
-      <div class="listhead"><span id="listCount"></span><button id="sort">Sort: newest</button></div>
-      <div id="list"></div>
-    </div>
-    <div class="detail" id="detail"><div class="meta">Click a dot on the map or a row in the list to see details.</div></div>
-  </div>
-</div>
+        function persist() {
+          if (oa && oa.setWidgetState) {
+            oa.setWidgetState({
+              minMag: state.minMag,
+              depth: state.depth,
+              place: state.place,
+              sort: state.sort,
+              selected: state.selected,
+            });
+          }
+        }
 
-<script>
-(() => {
-  const oa = window.openai;
-  const $ = (id) => document.getElementById(id);
-  const saved = (oa && oa.widgetState) || {};
-  const state = {
-    data: null,
-    minMag: saved.minMag ?? null,
-    depth: saved.depth ?? "all",
-    place: saved.place ?? "",
-    sort: saved.sort ?? "time",
-    selected: saved.selected ?? null,
-    loading: false,
-  };
+        function filtered() {
+          if (!state.data) return [];
+          const needle = state.place.trim().toLowerCase();
+          const out = state.data.quakes.filter(
+            (q) =>
+              q.mag >= state.minMag &&
+              (state.depth === "all" || depthBand(q.depth) === state.depth) &&
+              (!needle || q.place.toLowerCase().includes(needle)),
+          );
+          out.sort((a, b) =>
+            state.sort === "mag" ? b.mag - a.mag : b.time - a.time,
+          );
+          return out;
+        }
 
-  if (oa && oa.theme) document.documentElement.dataset.theme = oa.theme;
+        function drawMap(qs) {
+          const g = [];
+          for (let x = 0; x <= 360; x += 30)
+            g.push(
+              `<line x1="${x}" y1="0" x2="${x}" y2="180" stroke="var(--grid)" stroke-width=".3"/>`,
+            );
+          for (let y = 0; y <= 180; y += 30)
+            g.push(
+              `<line x1="0" y1="${y}" x2="360" y2="${y}" stroke="var(--grid)" stroke-width="${y === 90 ? 0.6 : 0.3}" ${y === 90 ? 'stroke-dasharray="2 2"' : ""}/>`,
+            );
+          const dots = [...qs]
+            .sort((a, b) => a.mag - b.mag)
+            .map((q) => {
+              const cx = (q.lon + 180).toFixed(2),
+                cy = (90 - q.lat).toFixed(2);
+              const r = Math.max(0.9, 0.18 * q.mag * q.mag).toFixed(2);
+              const sel = q.id === state.selected;
+              return `<circle class="quake${sel ? " sel" : ""}" data-id="${q.id}" cx="${cx}" cy="${cy}" r="${sel ? (r * 1.4).toFixed(2) : r}" fill="${depthColor(q.depth)}" fill-opacity=".7"><title>M${q.mag} ${esc(q.place)}</title></circle>`;
+            });
+          $("map").innerHTML = g.join("") + dots.join("");
+        }
 
-  const depthBand = (d) => (d < 70 ? "shallow" : d <= 300 ? "mid" : "deep");
-  const depthColor = (d) => `var(--${depthBand(d)})`;
-  const ago = (t) => {
-    const m = Math.round((Date.now() - t) / 60000);
-    if (m < 60) return `${m} min ago`;
-    const h = Math.round(m / 60);
-    if (h < 48) return `${h} h ago`;
-    return `${Math.round(h / 24)} days ago`;
-  };
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-
-  function persist() {
-    if (oa && oa.setWidgetState) {
-      oa.setWidgetState({ minMag: state.minMag, depth: state.depth, place: state.place, sort: state.sort, selected: state.selected });
-    }
-  }
-
-  function filtered() {
-    if (!state.data) return [];
-    const needle = state.place.trim().toLowerCase();
-    const out = state.data.quakes.filter((q) =>
-      q.mag >= state.minMag &&
-      (state.depth === "all" || depthBand(q.depth) === state.depth) &&
-      (!needle || q.place.toLowerCase().includes(needle))
-    );
-    out.sort((a, b) => (state.sort === "mag" ? b.mag - a.mag : b.time - a.time));
-    return out;
-  }
-
-  function drawMap(qs) {
-    const g = [];
-    for (let x = 0; x <= 360; x += 30) g.push(`<line x1="${x}" y1="0" x2="${x}" y2="180" stroke="var(--grid)" stroke-width=".3"/>`);
-    for (let y = 0; y <= 180; y += 30) g.push(`<line x1="0" y1="${y}" x2="360" y2="${y}" stroke="var(--grid)" stroke-width="${y === 90 ? .6 : .3}" ${y === 90 ? 'stroke-dasharray="2 2"' : ""}/>`);
-    const dots = [...qs].sort((a, b) => a.mag - b.mag).map((q) => {
-      const cx = (q.lon + 180).toFixed(2), cy = (90 - q.lat).toFixed(2);
-      const r = Math.max(0.9, 0.18 * q.mag * q.mag).toFixed(2);
-      const sel = q.id === state.selected;
-      return `<circle class="quake${sel ? " sel" : ""}" data-id="${q.id}" cx="${cx}" cy="${cy}" r="${sel ? (r * 1.4).toFixed(2) : r}" fill="${depthColor(q.depth)}" fill-opacity=".7"><title>M${q.mag} ${esc(q.place)}</title></circle>`;
-    });
-    $("map").innerHTML = g.join("") + dots.join("");
-  }
-
-  function drawList(qs) {
-    $("listCount").textContent = `${qs.length} shown`;
-    $("sort").textContent = state.sort === "mag" ? "Sort: strongest" : "Sort: newest";
-    if (!qs.length) { $("list").innerHTML = `<div class="empty">No earthquakes match these filters.</div>`; return; }
-    $("list").innerHTML = qs.slice(0, 150).map((q) => `
+        function drawList(qs) {
+          $("listCount").textContent = `${qs.length} shown`;
+          $("sort").textContent =
+            state.sort === "mag" ? "Sort: strongest" : "Sort: newest";
+          if (!qs.length) {
+            $("list").innerHTML =
+              `<div class="empty">No earthquakes match these filters.</div>`;
+            return;
+          }
+          $("list").innerHTML = qs
+            .slice(0, 150)
+            .map(
+              (q) => `
       <div class="row${q.id === state.selected ? " sel" : ""}" data-id="${q.id}">
         <div class="mag num" style="background:${depthColor(q.depth)}">${q.mag.toFixed(1)}</div>
         <div style="min-width:0"><div class="place">${esc(q.place)}</div><div class="meta num">${q.depth} km deep</div></div>
         <div class="meta">${ago(q.time)}</div>
-      </div>`).join("");
-  }
+      </div>`,
+            )
+            .join("");
+        }
 
-  function drawStats(qs) {
-    if (!qs.length) { $("stats").innerHTML = ""; return; }
-    const top = qs.reduce((a, b) => (b.mag > a.mag ? b : a));
-    const avgDepth = qs.reduce((s, q) => s + q.depth, 0) / qs.length;
-    const tsu = qs.filter((q) => q.tsunami).length;
-    $("stats").innerHTML = `
+        function drawStats(qs) {
+          if (!qs.length) {
+            $("stats").innerHTML = "";
+            return;
+          }
+          const top = qs.reduce((a, b) => (b.mag > a.mag ? b : a));
+          const avgDepth = qs.reduce((s, q) => s + q.depth, 0) / qs.length;
+          const tsu = qs.filter((q) => q.tsunami).length;
+          $("stats").innerHTML = `
       <div><b class="num">${qs.length}</b>earthquakes</div>
       <div><b class="num">M${top.mag.toFixed(1)}</b>strongest</div>
       <div><b class="num">${avgDepth.toFixed(0)} km</b>average depth</div>
       <div><b class="num">${tsu}</b>tsunami flags</div>`;
-  }
+        }
 
-  function drawDetail() {
-    const q = state.data && state.data.quakes.find((x) => x.id === state.selected);
-    if (!q) { $("detail").innerHTML = `<div class="meta">Click a dot on the map or a row in the list to see details.</div>`; return; }
-    const when = new Date(q.time);
-    $("detail").innerHTML = `
+        function drawDetail() {
+          const q =
+            state.data &&
+            state.data.quakes.find((x) => x.id === state.selected);
+          if (!q) {
+            $("detail").innerHTML =
+              `<div class="meta">Click a dot on the map or a row in the list to see details.</div>`;
+            return;
+          }
+          const when = new Date(q.time);
+          $("detail").innerHTML = `
       <div class="bigmag num" style="color:${depthColor(q.depth)}">M${q.mag.toFixed(1)}</div>
       <h2>${esc(q.place)}</h2>
       <div class="kv">
@@ -216,110 +546,196 @@
         <span>Alerts</span><span>${q.tsunami ? '<span class="badge">Tsunami flag</span> ' : ""}${q.alert ? `<span class="badge">PAGER ${esc(q.alert)}</span>` : "None"}</span>
       </div>
       <div><a href="${esc(q.url)}" target="_blank" rel="noopener" id="usgs">Open on USGS ↗</a></div>`;
-    const link = $("usgs");
-    if (oa && oa.openExternal) link.addEventListener("click", (e) => { e.preventDefault(); oa.openExternal({ href: q.url }); });
-  }
+          const link = $("usgs");
+          if (oa && oa.openExternal)
+            link.addEventListener("click", (e) => {
+              e.preventDefault();
+              oa.openExternal({ href: q.url });
+            });
+        }
 
-  function render() {
-    const d = state.data;
-    document.querySelectorAll("#range button").forEach((b) => {
-      b.setAttribute("aria-pressed", String(!!d && b.dataset.r === d.query.timeRange));
-      b.disabled = state.loading;
-    });
-    document.querySelectorAll("#depth .chip").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.d === state.depth)));
-    $("mag").value = state.minMag; $("magVal").textContent = Number(state.minMag).toFixed(1);
-    $("place").value = state.place;
-    if (!d) return;
-    $("sub").textContent = state.loading ? "Fetching fresh data from USGS…" :
-      d.stale ? `Showing cached data from ${d.source} · updated ${new Date(d.fetchedAt).toLocaleTimeString()}` :
-      `Live from ${d.source} · updated ${new Date(d.fetchedAt).toLocaleTimeString()}`;
-    const qs = filtered();
-    drawStats(qs); drawMap(qs); drawList(qs); drawDetail();
-  }
+        function render() {
+          const d = state.data;
+          document.querySelectorAll("#range button").forEach((b) => {
+            b.setAttribute(
+              "aria-pressed",
+              String(!!d && b.dataset.r === d.query.timeRange),
+            );
+            b.disabled = state.loading;
+          });
+          document
+            .querySelectorAll("#depth .chip")
+            .forEach((b) =>
+              b.setAttribute(
+                "aria-pressed",
+                String(b.dataset.d === state.depth),
+              ),
+            );
+          $("mag").value = state.minMag;
+          $("magVal").textContent = Number(state.minMag).toFixed(1);
+          $("place").value = state.place;
+          if (!d) return;
+          $("sub").textContent = state.loading
+            ? "Fetching fresh data from USGS…"
+            : d.stale
+              ? `Showing cached data from ${d.source} · updated ${new Date(d.fetchedAt).toLocaleTimeString()}`
+              : `Live from ${d.source} · updated ${new Date(d.fetchedAt).toLocaleTimeString()}`;
+          const qs = filtered();
+          drawStats(qs);
+          drawMap(qs);
+          drawList(qs);
+          drawDetail();
+        }
 
-  function showError(msg) {
-    $("err").textContent = msg || "";
-    $("err").hidden = !msg;
-  }
+        function showError(msg) {
+          $("err").textContent = msg || "";
+          $("err").hidden = !msg;
+        }
 
-  // Pull a readable error message out of a callTool result, or null if it succeeded
-  function toolError(res) {
-    const r = res && res.result && !res.structuredContent ? res.result : res;
-    if (!r || !r.isError) return null;
-    const t = Array.isArray(r.content) && r.content.find((c) => c && c.type === "text");
-    return (t && t.text) || "The earthquake service returned an error.";
-  }
+        // Pull a readable error message out of a callTool result, or null if it succeeded
+        function toolError(res) {
+          const r =
+            res && res.result && !res.structuredContent ? res.result : res;
+          if (!r || !r.isError) return null;
+          const t =
+            Array.isArray(r.content) &&
+            r.content.find((c) => c && c.type === "text");
+          return (t && t.text) || "The earthquake service returned an error.";
+        }
 
-  function setData(data) {
-    if (!data || !Array.isArray(data.quakes) || !data.query) return;
-    state.data = data;
-    if (state.minMag == null || state.minMag < data.query.minMagnitude) state.minMag = data.query.minMagnitude;
-    $("mag").min = data.query.minMagnitude;
-    if (state.selected && !data.quakes.some((q) => q.id === state.selected)) state.selected = null;
-    render();
-  }
+        function setData(data) {
+          if (!data || !Array.isArray(data.quakes) || !data.query) return;
+          state.data = data;
+          if (state.minMag == null || state.minMag < data.query.minMagnitude)
+            state.minMag = data.query.minMagnitude;
+          $("mag").min = data.query.minMagnitude;
+          if (
+            state.selected &&
+            !data.quakes.some((q) => q.id === state.selected)
+          )
+            state.selected = null;
+          render();
+        }
 
-  // Interaction 1: time range -> calls the MCP tool again for fresh USGS data
-  async function changeRange(r) {
-    if (!state.data || state.loading) return;
-    state.loading = true; render();
-    const args = { timeRange: r, minMagnitude: state.data.query.minMagnitude };
-    try {
-      let next;
-      if (oa && oa.callTool) {
-        const res = await oa.callTool("get_recent_earthquakes", args);
-        const err = toolError(res);
-        if (err) throw new Error(err);
-        next = res && (res.structuredContent || (res.result && res.result.structuredContent));
-      } else {
-        const resp = await fetch(`/api/quakes?timeRange=${r}&minMagnitude=${args.minMagnitude}`);
-        const body = await resp.json().catch(() => null);
-        if (!resp.ok) throw new Error((body && body.error) || `Server responded ${resp.status}`);
-        next = body;
-      }
-      if (!next || !Array.isArray(next.quakes)) throw new Error("No earthquake data was returned.");
-      state.loading = false;
-      showError("");
-      setData(next);
-    } catch (e) {
-      // Keep the previous data visible and explain what happened
-      state.loading = false; render();
-      showError("Could not refresh earthquakes: " + ((e && e.message) || "unknown error") + " Showing previous results.");
-    }
-  }
+        // Interaction 1: time range -> calls the MCP tool again for fresh USGS data
+        async function changeRange(r) {
+          if (!state.data || state.loading) return;
+          state.loading = true;
+          render();
+          const args = {
+            timeRange: r,
+            minMagnitude: state.data.query.minMagnitude,
+          };
+          try {
+            let next;
+            if (oa && oa.callTool) {
+              const res = await oa.callTool("get_recent_earthquakes", args);
+              const err = toolError(res);
+              if (err) throw new Error(err);
+              next =
+                res &&
+                (res.structuredContent ||
+                  (res.result && res.result.structuredContent));
+            } else {
+              const resp = await fetch(
+                `/api/quakes?timeRange=${r}&minMagnitude=${args.minMagnitude}`,
+              );
+              const body = await resp.json().catch(() => null);
+              if (!resp.ok)
+                throw new Error(
+                  (body && body.error) || `Server responded ${resp.status}`,
+                );
+              next = body;
+            }
+            if (!next || !Array.isArray(next.quakes))
+              throw new Error("No earthquake data was returned.");
+            state.loading = false;
+            showError("");
+            setData(next);
+          } catch (e) {
+            // Keep the previous data visible and explain what happened
+            state.loading = false;
+            render();
+            showError(
+              "Could not refresh earthquakes: " +
+                ((e && e.message) || "unknown error") +
+                " Showing previous results.",
+            );
+          }
+        }
 
-  $("range").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) changeRange(b.dataset.r); });
-  // Interaction 2: magnitude slider (instant client-side filter)
-  $("mag").addEventListener("input", (e) => { state.minMag = Number(e.target.value); render(); persist(); });
-  // Interaction 3: depth bands
-  $("depth").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (!b) return; state.depth = b.dataset.d; render(); persist(); });
-  // Interaction 4: place search (debounced; state updates immediately so other renders don't clobber typing)
-  let placeTimer = null;
-  $("place").addEventListener("input", (e) => {
-    state.place = e.target.value;
-    clearTimeout(placeTimer);
-    placeTimer = setTimeout(() => { render(); persist(); }, 200);
-  });
-  // Interaction 5: sort
-  $("sort").addEventListener("click", () => { state.sort = state.sort === "time" ? "mag" : "time"; render(); persist(); });
-  // Interaction 6: select from map or list -> detail panel
-  const pick = (id) => { state.selected = state.selected === id ? null : id; render(); persist(); };
-  $("map").addEventListener("click", (e) => { const c = e.target.closest(".quake"); if (c) pick(c.dataset.id); });
-  $("list").addEventListener("click", (e) => { const r = e.target.closest(".row"); if (r) pick(r.dataset.id); });
+        $("range").addEventListener("click", (e) => {
+          const b = e.target.closest("button");
+          if (b) changeRange(b.dataset.r);
+        });
+        // Interaction 2: magnitude slider (instant client-side filter)
+        $("mag").addEventListener("input", (e) => {
+          state.minMag = Number(e.target.value);
+          render();
+          persist();
+        });
+        // Interaction 3: depth bands
+        $("depth").addEventListener("click", (e) => {
+          const b = e.target.closest(".chip");
+          if (!b) return;
+          state.depth = b.dataset.d;
+          render();
+          persist();
+        });
+        // Interaction 4: place search (debounced; state updates immediately so other renders don't clobber typing)
+        let placeTimer = null;
+        $("place").addEventListener("input", (e) => {
+          state.place = e.target.value;
+          clearTimeout(placeTimer);
+          placeTimer = setTimeout(() => {
+            render();
+            persist();
+          }, 200);
+        });
+        // Interaction 5: sort
+        $("sort").addEventListener("click", () => {
+          state.sort = state.sort === "time" ? "mag" : "time";
+          render();
+          persist();
+        });
+        // Interaction 6: select from map or list -> detail panel
+        const pick = (id) => {
+          state.selected = state.selected === id ? null : id;
+          render();
+          persist();
+        };
+        $("map").addEventListener("click", (e) => {
+          const c = e.target.closest(".quake");
+          if (c) pick(c.dataset.id);
+        });
+        $("list").addEventListener("click", (e) => {
+          const r = e.target.closest(".row");
+          if (r) pick(r.dataset.id);
+        });
 
-  // Data from Athena (window.openai) or, in standalone preview, from /api/quakes
-  window.addEventListener("openai:set_globals", (e) => {
-    const g = (e.detail && e.detail.globals) || {};
-    if (g.theme) document.documentElement.dataset.theme = g.theme;
-    if (g.toolOutput) setData(g.toolOutput);
-  });
-  if (oa && oa.toolOutput) setData(oa.toolOutput);
-  else if (!oa) fetch("/api/quakes?timeRange=day&minMagnitude=2.5")
-    .then((r) => r.json().then((b) => { if (!r.ok) throw new Error(b && b.error); return b; }))
-    .then(setData)
-    .catch((e) => { $("sub").textContent = "Preview mode: could not load data" + (e && e.message ? ` (${e.message})` : ""); });
-  render();
-})();
-</script>
-</body>
+        // Data from Athena (window.openai) or, in standalone preview, from /api/quakes
+        window.addEventListener("openai:set_globals", (e) => {
+          const g = (e.detail && e.detail.globals) || {};
+          if (g.theme) document.documentElement.dataset.theme = g.theme;
+          if (g.toolOutput) setData(g.toolOutput);
+        });
+        if (oa && oa.toolOutput) setData(oa.toolOutput);
+        else if (!oa)
+          fetch("/api/quakes?timeRange=day&minMagnitude=2.5")
+            .then((r) =>
+              r.json().then((b) => {
+                if (!r.ok) throw new Error(b && b.error);
+                return b;
+              }),
+            )
+            .then(setData)
+            .catch((e) => {
+              $("sub").textContent =
+                "Preview mode: could not load data" +
+                (e && e.message ? ` (${e.message})` : "");
+            });
+        render();
+      })();
+    </script>
+  </body>
 </html>

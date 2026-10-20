@@ -17,13 +17,22 @@ const FETCH_TIMEOUT_MS = 8_000;
 const MAX_QUAKES = 300;
 
 // Read once at startup; served from memory on every request
-const WIDGET_HTML = readFileSync(join(__dirname, "public", "widget.html"), "utf8");
+const WIDGET_HTML = readFileSync(
+  join(__dirname, "public", "widget.html"),
+  "utf8",
+);
 
 // ---- Data: USGS Earthquake Hazards Program (public, no API key) ----
 function feedUrl(timeRange, minMagnitude) {
   const period = PERIODS.has(timeRange) ? timeRange : "day";
   const level =
-    minMagnitude >= 4.5 ? "4.5" : minMagnitude >= 2.5 ? "2.5" : minMagnitude >= 1 ? "1.0" : "all";
+    minMagnitude >= 4.5
+      ? "4.5"
+      : minMagnitude >= 2.5
+        ? "2.5"
+        : minMagnitude >= 1
+          ? "1.0"
+          : "all";
   return `${FEED_BASE}/${level}_${period}.geojson`;
 }
 
@@ -47,7 +56,9 @@ async function downloadFeed(url) {
     return entry;
   } catch (e) {
     if (e.name === "AbortError")
-      throw new Error(`USGS did not respond within ${FETCH_TIMEOUT_MS / 1000}s`);
+      throw new Error(
+        `USGS did not respond within ${FETCH_TIMEOUT_MS / 1000}s`,
+      );
     throw e;
   } finally {
     clearTimeout(timer);
@@ -57,7 +68,8 @@ async function downloadFeed(url) {
 // Returns { features, fetchedAt, stale }. Falls back to stale cache if USGS fails.
 async function getFeed(url) {
   const hit = cache.get(url);
-  if (hit && Date.now() - hit.fetchedAt < CACHE_TTL_MS) return { ...hit, stale: false };
+  if (hit && Date.now() - hit.fetchedAt < CACHE_TTL_MS)
+    return { ...hit, stale: false };
 
   let pending = inFlight.get(url);
   if (!pending) {
@@ -69,7 +81,9 @@ async function getFeed(url) {
   } catch (e) {
     const old = cache.get(url);
     if (old) {
-      console.warn(`USGS fetch failed (${e.message}); serving stale cache for ${url}`);
+      console.warn(
+        `USGS fetch failed (${e.message}); serving stale cache for ${url}`,
+      );
       return { ...old, stale: true };
     }
     throw e;
@@ -86,7 +100,8 @@ function toQuake(f) {
   return {
     id: String(f.id ?? `${p.time}-${c[0]}-${c[1]}`),
     mag: Math.round(p.mag * 10) / 10,
-    place: typeof p.place === "string" && p.place ? p.place : "Unknown location",
+    place:
+      typeof p.place === "string" && p.place ? p.place : "Unknown location",
     time: p.time,
     depth: Math.round((isNum(c[2]) ? c[2] : 0) * 10) / 10,
     lon: c[0],
@@ -204,7 +219,11 @@ function buildServer() {
           ],
         };
       }
-      const text = summary(data) + (data.stale ? " (Showing cached data; USGS is temporarily unreachable.)" : "");
+      const text =
+        summary(data) +
+        (data.stale
+          ? " (Showing cached data; USGS is temporarily unreachable.)"
+          : "");
       return {
         content: [{ type: "text", text }],
         structuredContent: data,
@@ -258,23 +277,19 @@ app.post("/mcp", async (req, res) => {
   } catch (e) {
     console.error(e);
     if (!res.headersSent)
-      res
-        .status(500)
-        .json({
-          jsonrpc: "2.0",
-          error: { code: -32603, message: "Internal error" },
-          id: null,
-        });
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: { code: -32603, message: "Internal error" },
+        id: null,
+      });
   }
 });
 app.all("/mcp", (_req, res) =>
-  res
-    .status(405)
-    .json({
-      jsonrpc: "2.0",
-      error: { code: -32000, message: "Method not allowed" },
-      id: null,
-    }),
+  res.status(405).json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message: "Method not allowed" },
+    id: null,
+  }),
 );
 
 // Global error handler (also catches malformed JSON bodies)
@@ -285,16 +300,25 @@ app.use((err, req, res, _next) => {
   if (req.path === "/mcp") {
     res.status(status).json({
       jsonrpc: "2.0",
-      error: { code: status === 400 ? -32700 : -32603, message: status === 400 ? "Parse error" : "Internal error" },
+      error: {
+        code: status === 400 ? -32700 : -32603,
+        message: status === 400 ? "Parse error" : "Internal error",
+      },
       id: null,
     });
   } else {
-    res.status(status).json({ error: status === 500 ? "Internal server error" : err.message });
+    res
+      .status(status)
+      .json({ error: status === 500 ? "Internal server error" : err.message });
   }
 });
 
-process.on("unhandledRejection", (reason) => console.error("Unhandled rejection:", reason));
-process.on("uncaughtException", (err) => console.error("Uncaught exception:", err));
+process.on("unhandledRejection", (reason) =>
+  console.error("Unhandled rejection:", reason),
+);
+process.on("uncaughtException", (err) =>
+  console.error("Uncaught exception:", err),
+);
 
 const PORT = process.env.PORT || 8787;
 app.listen(PORT, () =>
