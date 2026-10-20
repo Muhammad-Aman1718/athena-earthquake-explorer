@@ -66,6 +66,8 @@
   .bigmag { font-size: 34px; font-weight: 700; line-height: 1; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; background: var(--chip); }
   .empty { padding: 24px; text-align: center; color: var(--muted); }
+  .err { border: 1px solid #e5484d; color: #e5484d; background: var(--panel); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  .err[hidden] { display: none; }
   a { color: var(--ink); }
 </style>
 </head>
@@ -100,6 +102,8 @@
       <input type="search" id="place" placeholder="e.g. Japan, Alaska, Chile" />
     </label>
   </div>
+
+  <div class="err" id="err" role="alert" hidden></div>
 
   <div class="stats" id="stats"></div>
 
@@ -227,13 +231,27 @@
     $("place").value = state.place;
     if (!d) return;
     $("sub").textContent = state.loading ? "Fetching fresh data from USGS…" :
+      d.stale ? `Showing cached data from ${d.source} · updated ${new Date(d.fetchedAt).toLocaleTimeString()}` :
       `Live from ${d.source} · updated ${new Date(d.fetchedAt).toLocaleTimeString()}`;
     const qs = filtered();
     drawStats(qs); drawMap(qs); drawList(qs); drawDetail();
   }
 
+  function showError(msg) {
+    $("err").textContent = msg || "";
+    $("err").hidden = !msg;
+  }
+
+  // Pull a readable error message out of a callTool result, or null if it succeeded
+  function toolError(res) {
+    const r = res && res.result && !res.structuredContent ? res.result : res;
+    if (!r || !r.isError) return null;
+    const t = Array.isArray(r.content) && r.content.find((c) => c && c.type === "text");
+    return (t && t.text) || "The earthquake service returned an error.";
+  }
+
   function setData(data) {
-    if (!data || !data.quakes) return;
+    if (!data || !Array.isArray(data.quakes) || !data.query) return;
     state.data = data;
     if (state.minMag == null || state.minMag < data.query.minMagnitude) state.minMag = data.query.minMagnitude;
     $("mag").min = data.query.minMagnitude;
@@ -250,15 +268,23 @@
       let next;
       if (oa && oa.callTool) {
         const res = await oa.callTool("get_recent_earthquakes", args);
+        const err = toolError(res);
+        if (err) throw new Error(err);
         next = res && (res.structuredContent || (res.result && res.result.structuredContent));
       } else {
-        next = await (await fetch(`/api/quakes?timeRange=${r}&minMagnitude=${args.minMagnitude}`)).json();
+        const resp = await fetch(`/api/quakes?timeRange=${r}&minMagnitude=${args.minMagnitude}`);
+        const body = await resp.json().catch(() => null);
+        if (!resp.ok) throw new Error((body && body.error) || `Server responded ${resp.status}`);
+        next = body;
       }
+      if (!next || !Array.isArray(next.quakes)) throw new Error("No earthquake data was returned.");
       state.loading = false;
-      if (next) setData(next); else render();
+      showError("");
+      setData(next);
     } catch (e) {
+      // Keep the previous data visible and explain what happened
       state.loading = false; render();
-      $("sub").textContent = "Could not refresh: " + e.message;
+      showError("Could not refresh earthquakes: " + ((e && e.message) || "unknown error") + " Showing previous results.");
     }
   }
 
@@ -267,8 +293,13 @@
   $("mag").addEventListener("input", (e) => { state.minMag = Number(e.target.value); render(); persist(); });
   // Interaction 3: depth bands
   $("depth").addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (!b) return; state.depth = b.dataset.d; render(); persist(); });
-  // Interaction 4: place search
-  $("place").addEventListener("input", (e) => { state.place = e.target.value; render(); persist(); });
+  // Interaction 4: place search (debounced; state updates immediately so other renders don't clobber typing)
+  let placeTimer = null;
+  $("place").addEventListener("input", (e) => {
+    state.place = e.target.value;
+    clearTimeout(placeTimer);
+    placeTimer = setTimeout(() => { render(); persist(); }, 200);
+  });
   // Interaction 5: sort
   $("sort").addEventListener("click", () => { state.sort = state.sort === "time" ? "mag" : "time"; render(); persist(); });
   // Interaction 6: select from map or list -> detail panel
@@ -283,8 +314,10 @@
     if (g.toolOutput) setData(g.toolOutput);
   });
   if (oa && oa.toolOutput) setData(oa.toolOutput);
-  else if (!oa) fetch("/api/quakes?timeRange=day&minMagnitude=2.5").then((r) => r.json()).then(setData)
-    .catch(() => { $("sub").textContent = "Preview mode: could not reach /api/quakes"; });
+  else if (!oa) fetch("/api/quakes?timeRange=day&minMagnitude=2.5")
+    .then((r) => r.json().then((b) => { if (!r.ok) throw new Error(b && b.error); return b; }))
+    .then(setData)
+    .catch((e) => { $("sub").textContent = "Preview mode: could not load data" + (e && e.message ? ` (${e.message})` : ""); });
   render();
 })();
 </script>
